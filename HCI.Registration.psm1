@@ -38,7 +38,7 @@ Function Collect-HCIRegistrationInfo
     $ClusterName = (Get-Cluster), #Name of the cluster
     $WorkFolder = (Get-Location), #Working folder location, default is where you run the cmdlet
     $ConnectionCheck = $true, #Check connection
-    $CheckIMDS = $false # Check IMDS
+    $CheckIMDS = $true # Check IMDS
     )
 
 # include az.accounts , az.resource updates before stackhci
