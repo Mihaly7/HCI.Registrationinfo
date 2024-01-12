@@ -103,7 +103,7 @@ foreach ($node in $nodes)
             {
                 $cmdlist +=
                     @{C = 'Get-AzureStackHCIAttestation'; F = $null},
-                    @{C = 'Get-VMAzStackHCIAttestion'; F = $null},
+                    @{C = 'Get-VMAzStackHCIAttestion'; F = $null}
             }
 
         Foreach ($cmd in $cmdlist)
