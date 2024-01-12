@@ -38,7 +38,6 @@ Function Collect-HCIRegistrationInfo
     $ClusterName = (Get-Cluster), #Name of the cluster
     $WorkFolder = (Get-Location), #Working folder location, default is where you run the cmdlet
     $ConnectionCheck = $true, #Check connection
-    $CheckIMDS = $true # Check IMDS
     )
 
 # include az.accounts , az.resource updates before stackhci
@@ -96,15 +95,9 @@ foreach ($node in $nodes)
         $cmdlist =
             @{C = 'Get-AzureStackHci'; F = $null},
             @{C = 'Get-AzureStackHCIArcIntegration'; F = $null},
-            @{C = 'Get-ClusteredScheduledTask | fl *'; F = $null}
-
-        If ($CheckIMDS -eq $true)
-
-            {
-                $cmdlist +=
-                    @{C = 'Get-AzureStackHCIAttestation'; F = $null},
-                    @{C = 'Get-VMAzStackHCIAttestion'; F = $null}
-            }
+            @{C = 'Get-ClusteredScheduledTask | fl *'; F = $null},
+            @{C = 'Get-AzureStackHCIAttestation'; F = $null},
+            @{C = 'Get-AzStackHCIVMAttestation'; F = $null}
 
         Foreach ($cmd in $cmdlist)
                 {
