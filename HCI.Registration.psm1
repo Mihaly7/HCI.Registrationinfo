@@ -37,7 +37,7 @@ Function Collect-HCIRegistrationInfo
     (
     $ClusterName = (Get-Cluster), #Name of the cluster
     $WorkFolder = (Get-Location), #Working folder location, default is where you run the cmdlet
-    $ConnectionCheck = $true, #Check connection
+    $ConnectionCheck = $true #Check connection
     )
 
 # include az.accounts , az.resource updates before stackhci
