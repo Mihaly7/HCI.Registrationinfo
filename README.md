@@ -25,5 +25,5 @@ Run Data collection
 
 `Collect-HciRegistrationInfo`
 
-If `AzStackHci.EnvironmentChecker` is already installed, connectivity validation runs by default.
-If it is missing, the collector records that the check was skipped and continues without installing anything.
+If `Invoke-AzStackHciConnectivityValidation` is available, connectivity validation runs by default.
+If the cmdlet is unavailable, the collector records that the check was skipped and continues.

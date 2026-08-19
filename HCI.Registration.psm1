@@ -22,7 +22,7 @@ Function Collect-HCIRegistrationInfo
         Working path where the data will be collected (current location by default)
 
         .PARAMETER ConnectionCheck
-        Run Invoke-AzStackHciConnectivityValidation when the AzStackHci.EnvironmentChecker module is already installed.
+        Run Invoke-AzStackHciConnectivityValidation when the cmdlet is available.
         The check is enabled by default and can be disabled with $false.
 
         .EXAMPLE
@@ -141,13 +141,13 @@ foreach ($node in $nodes)
         Write-host " - " -NoNewLine; Write-Host "OK" -ForegroundColor Green
         If ($using:connectioncheck -eq $true)
             {
-            If (Get-Module -ListAvailable AzStackHci.EnvironmentChecker -ErrorAction SilentlyContinue)
+            If (Get-Command -Name Invoke-AzStackHciConnectivityValidation -ErrorAction SilentlyContinue)
                 {
                 Invoke-AzStackHciConnectivityValidation -outputpath $ExportPath
                 }
             Else
                 {
-                $message = "AzStackHci.EnvironmentChecker is not installed. Connectivity validation was skipped; the collector does not install or update modules."
+                $message = "Invoke-AzStackHciConnectivityValidation is not available. Connectivity validation was skipped."
                 Write-Warning $message
                 $message | Out-File $ExportPath"\"$using:node'-ConnectivityValidation-Skipped.txt'
                 }
