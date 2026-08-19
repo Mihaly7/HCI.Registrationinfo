@@ -1,8 +1,7 @@
 ######################################################################################################################################
 #                                                                                                                                    #
 # Diagnostic data collector script for AZHCI registration related issues.                                                            #
-# This script update/install Az.StackHCI, Az.Resources, Az.Account modules.                                                          #
-# Installs the AzStackHci.EnvironmentChecker module then collect Cluster registration and Arc agent related data.                    #
+# This script collects cluster registration, event log, and Azure Arc agent data without changing installed modules.                 #
 #                                                                                                                                    #
 ######################################################################################################################################
 
@@ -12,12 +11,9 @@ Function Collect-HCIRegistrationInfo
         Collect Azure Stack HCI registration related logs and Azure Arc setup related logs.
 
         .DESCRIPTION
-        This script update/install Az.StackHCI, Az.Resources, Az.Account modules, install the AzStackHci.EnvironmentChecker module then collect Cluster registration and Arc agent related data.
+        This script collects cluster registration and Arc agent related data without installing or updating NuGet providers or PowerShell modules.
+        The HCI Debug event log is enabled on all nodes before a transcripted PowerShell window is opened for reproducing the registration issue.
         It can run remotely or directly on the cluster.
-
-        !!! WARNING !!!
-        This script installs nuget package provider on the cluster nodes.
-        Update/Install powershell modules.
 
         .PARAMETER ClusterName
         Name of the cluster
@@ -26,7 +22,8 @@ Function Collect-HCIRegistrationInfo
         Working path where the data will be collected (current location by default)
 
         .PARAMETER ConnectionCheck
-        Run Invoke-AzStackHciConnectivityValidation (enabled by default, disable with $false)
+        Run Invoke-AzStackHciConnectivityValidation when the AzStackHci.EnvironmentChecker module is already installed.
+        The check is enabled by default and can be disabled with $false.
 
         .EXAMPLE
         PS> Collect-HCIRegistrationInfo -ClusterName Cluster -ConnectionCheck $false
@@ -40,11 +37,56 @@ Function Collect-HCIRegistrationInfo
     $ConnectionCheck = $true #Check connection
     )
 
-# include az.accounts , az.resource updates before stackhci
-
 $nodes = get-clusternode -Cluster $clustername
 $path = New-Item -ItemType Directory -Path (Get-Item -Path $WorkFolder).FullName -Name $clustername"_RegistrationInfo" -Force
 $path.fullname
+
+Write-Host "Enabling Microsoft-AzureStack-HCI/Debug on all cluster nodes" -ForegroundColor Cyan
+foreach ($node in $nodes)
+    {
+        try
+            {
+                Invoke-Command -ComputerName $node.Name -ErrorAction Stop -ScriptBlock {
+                    Wevtutil.exe sl /q /e:true Microsoft-AzureStack-HCI/Debug
+                    (New-Object System.Diagnostics.Eventing.Reader.EventLogConfiguration "Microsoft-AzureStack-HCI/Debug").IsEnabled
+                } | Out-Null
+                Write-Host "$($node.Name) - Debug log enabled" -ForegroundColor Green
+            }
+        catch
+            {
+                throw "Failed to enable Microsoft-AzureStack-HCI/Debug on $($node.Name): $($_.Exception.Message)"
+            }
+    }
+
+$TranscriptPath = Join-Path $path.FullName ("RegistrationRepro-{0}.txt" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+$EscapedTranscriptPath = $TranscriptPath.Replace("'", "''")
+$ReproScript = @"
+`$ErrorActionPreference = 'Continue'
+Start-Transcript -Path '$EscapedTranscriptPath' -Force
+function Complete-HCIRegistrationRepro {
+    Stop-Transcript
+    exit
+}
+Write-Host ''
+Write-Host 'HCI registration reproduction capture is active.' -ForegroundColor Cyan
+Write-Host 'Run the registration or repair-registration command in this window.' -ForegroundColor Yellow
+Write-Host 'When the attempt finishes, run Complete-HCIRegistrationRepro.' -ForegroundColor Yellow
+Write-Host 'The transcript and RegisterHCI logs created in this folder will be included in the data bundle.' -ForegroundColor Cyan
+Write-Host ''
+"@
+$EncodedReproScript = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($ReproScript))
+$WindowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+$ReproProcess = Start-Process -FilePath $WindowsPowerShell -ArgumentList "-NoLogo -NoExit -EncodedCommand $EncodedReproScript" -WorkingDirectory $path.FullName -PassThru
+
+Write-Host "Waiting for registration reproduction in PowerShell process $($ReproProcess.Id)." -ForegroundColor Cyan
+Write-Host "Complete the attempt and run Complete-HCIRegistrationRepro in the opened window." -ForegroundColor Yellow
+Wait-Process -Id $ReproProcess.Id
+
+if (-not (Test-Path -LiteralPath $TranscriptPath))
+    {
+        Write-Warning "The reproduction PowerShell window closed without creating the expected transcript: $TranscriptPath"
+    }
+
 foreach ($node in $nodes)
     {
         Write-Host "Checking node $node" -ForegroundColor Cyan
@@ -54,34 +96,6 @@ foreach ($node in $nodes)
         # Creating working folder
         New-Item -ItemType Directory -Path c:\ -Name $using:node -ErrorAction SilentlyContinue
         $ExportPath =  (Get-Item "C:\$using:node").FullName
-
-        # Enabling debug log
-        Write-Host "Setting debug log for HCISVC if not already" -NoNewLine
-        $ErrorActionPreference = "Silentlycontinue"
-        Wevtutil.exe sl /q /e:true Microsoft-AzureStack-HCI/Debug
-        $ErrorActionPreference = "continue"
-        Write-host " - " -NoNewLine; Write-Host "OK" -ForegroundColor Green
-
-        #Installing nuget package provider
-        Write-Host "Installing Package provider Nuget" -NoNewLine
-        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction SilentlyContinue | Out-File $ExportPath"\"$using:node'-nuget_install.txt'
-        Write-host " - " -NoNewLine; Write-Host "OK" -ForegroundColor Green
-        # "Setting PsRepository named PSGallery to trusted"
-        If ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne "Trusted")
-            {
-                Write-Host "Setting PsRepository named PSGallery to trusted" -NoNewLine
-                Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-                Write-host " - " -NoNewLine; Write-Host "OK" -ForegroundColor Green
-            }
-
-        #Update modules
-        Write-Host "Update Modules" -NoNewLine
-        If (Get-InstalledModule Az.StackHCI) {Update-Module -Confirm:$False -ErrorAction SilentlyContinue} Else {Install-Module Az.StackHCI -AllowClobber -Confirm:$False -ErrorAction SilentlyContinue}
-        If (Get-InstalledModule Az.Accounts) {Update-Module -Confirm:$False -ErrorAction SilentlyContinue} Else {Install-Module Az.Accounts -Confirm:$False -ErrorAction SilentlyContinue}
-        If (Get-InstalledModule Az.Resources) {Update-Module -Confirm:$False -ErrorAction SilentlyContinue} Else {Install-Module Az.Resources -Confirm:$False -ErrorAction SilentlyContinue}
-        Write-host " - " -NoNewLine; Write-Host "OK" -ForegroundColor Green
-
-
 
         # Cmdlets to drop in TXT and XML forms
                 #
@@ -127,14 +141,15 @@ foreach ($node in $nodes)
         Write-host " - " -NoNewLine; Write-Host "OK" -ForegroundColor Green
         If ($using:connectioncheck -eq $true)
             {
-            If (Get-Module AzStackHci.EnvironmentChecker -ErrorAction SilentlyContinue)
+            If (Get-Module -ListAvailable AzStackHci.EnvironmentChecker -ErrorAction SilentlyContinue)
                 {
                 Invoke-AzStackHciConnectivityValidation -outputpath $ExportPath
                 }
             Else
                 {
-                Find-Module -Name AzStackHci.EnvironmentChecker  | Install-Module -AllowClobber -Confirm:$false
-                Invoke-AzStackHciConnectivityValidation -outputpath $ExportPath
+                $message = "AzStackHci.EnvironmentChecker is not installed. Connectivity validation was skipped; the collector does not install or update modules."
+                Write-Warning $message
+                $message | Out-File $ExportPath"\"$using:node'-ConnectivityValidation-Skipped.txt'
                 }
             }
         Else
