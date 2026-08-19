@@ -1,8 +1,6 @@
 # HCI.Registrationinfo
 Collects Azure Local registration, connection, IMDS, event log, and Azure Arc configuration data.
 
-The collector does not install or update NuGet providers or PowerShell modules and does not change PSGallery trust.
-
 At the start of collection, the module enables `Microsoft-AzureStack-HCI/Debug` on every cluster node.
 It then opens a dedicated Windows PowerShell window and pauses collection while the user reproduces the registration or repair-registration failure.
 The reproduction window records a transcript and writes registration logs into the bundle directory.
