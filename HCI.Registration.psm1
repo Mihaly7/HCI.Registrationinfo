@@ -111,7 +111,7 @@ foreach ($node in $nodes)
             @{C = 'Get-AzureStackHCIArcIntegration'; F = $null},
             @{C = 'Get-ClusteredScheduledTask | fl *'; F = $null},
             @{C = 'Get-AzureStackHCIAttestation'; F = $null},
-            @{C = 'Get-AzStackHCIVMAttestation'; F = $null}
+            @{C = 'Get-AzStackHCIVMAttestation -Local'; F = $null}
 
         Foreach ($cmd in $cmdlist)
                 {
